@@ -89,7 +89,7 @@ void run_benchmark(int num_producers, int num_consumers,
 
 
 void benchmark_thread_pool(int num_threads, int total_tasks) {
-    ThreadPool<std::function<void()>> pool(num_threads);
+    ThreadPool<std::function<void()>> pool;
     std::atomic<int> tasks_remaining(total_tasks);
 
     auto start = std::chrono::high_resolution_clock::now();
@@ -115,7 +115,7 @@ void benchmark_thread_pool(int num_threads, int total_tasks) {
     std::chrono::duration<double> elapsed = end - start;
 
     std::cout << "--- ThreadPool Benchmark ---" << std::endl;
-    std::cout << "Threads: " << num_threads << " | Tasks: " << total_tasks << std::endl;
+    std::cout << "Threads: " << std::thread::hardware_concurrency() << " | Tasks: " << total_tasks << std::endl;
     std::cout << "Time: " << elapsed.count() << "s" << std::endl;
     std::cout << "Throughput: " << total_tasks / elapsed.count() << " tasks/sec" << std::endl;
 }
@@ -132,7 +132,7 @@ int main() {
 
 
 
-  // ThreadPool<std::function<void()>> pool(2);
+  // ThreadPool<std::function<void()>> pool;
   //
   // pool.addTask([]() { std::cout << "Task 1 running on thread " << std::this_thread::get_id() << std::endl; });
   // pool.addTask([]() { std::cout << "Task 2 running on thread " << std::this_thread::get_id() << std::endl; });
