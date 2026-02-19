@@ -1,9 +1,8 @@
 #pragma once
 #include <atomic>
-#include <queue>
 #include <condition_variable>
 #include <mutex>
-
+#include <queue>
 
 template <typename T> class TSQueue {
 
@@ -11,9 +10,10 @@ private:
   std::queue<T> q;
   mutable std::mutex mtx;
   // sort of used for communication between threads
+  // read more indepth about this
   std::condition_variable cv;
 
-  std::atomic<bool> done = false ;
+  std::atomic<bool> done = false;
 
 public:
   TSQueue() = default;
@@ -39,9 +39,10 @@ public:
     cv.wait(ulk, [this] { return q.size() > 0 || done; });
 
     // this is to tell that we are done processing tasks you can leave now
-    if(q.size() == 0 && done) return false;
+    if (q.size() == 0 && done)
+      return false;
 
-    // this will never be null as we are waiting for any items 
+    // this will never be null as we are waiting for any items
     // to be inserted into our queue
     //
     // this says that there is sstill data to process
@@ -57,11 +58,8 @@ public:
     return q.size();
   }
 
-  void close(){
+  void close() {
     done = true;
     cv.notify_all();
   }
 };
-
-
-
