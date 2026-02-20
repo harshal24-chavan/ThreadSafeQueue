@@ -87,72 +87,74 @@ void run_benchmark(int num_producers, int num_consumers,
   std::cout << "Throughput: " << throughput << " items/sec" << std::endl;
 }
 
+void my_task_wrapper(void *arg) {
+  auto *counter = static_cast<std::atomic<int> *>(arg);
 
+  // Perform dummy work
+  double result = 0;
+  for (int i = 0; i < 1000; ++i) {
+    result += (i * i);
+  }
 
-void benchmark_thread_pool(int num_threads, int total_tasks) {
-    ThreadPoolDeq<std::function<void()>> pool;
-    std::atomic<int> tasks_remaining(total_tasks);
-
-    auto start = std::chrono::high_resolution_clock::now();
-
-    // using namespace std::chrono_literals;
-    // pool.addTask([&tasks_remaining](){
-    //     std::this_thread::sleep_for(1s);
-    //     });
-
-    for (int i = 0; i < total_tasks; ++i) {
-      pool.submitTask([&tasks_remaining]() {
-          // Perform some dummy work to make the thread "busy"
-          double result = 0;
-          for(int i = 0; i < 1000; ++i) {
-          result += (i*i);
-          }
-          // Now decrement
-          tasks_remaining--;
-          });
-    }
-
-    // "Busy wait" until all tasks are done
-    while (tasks_remaining > 0) {
-        std::this_thread::yield(); 
-    }
-
-    auto end = std::chrono::high_resolution_clock::now();
-    std::chrono::duration<double> elapsed = end - start;
-
-    std::cout << "--- ThreadPool Benchmark ---" << std::endl;
-    std::cout << "Threads: " << std::thread::hardware_concurrency() << " | Tasks: " << total_tasks << std::endl;
-    std::cout << "Time: " << elapsed.count() << "s" << std::endl;
-    std::cout << "Throughput: " << total_tasks / elapsed.count() << " tasks/sec" << std::endl;
+  (*counter)--;
 }
 
+void benchmark_thread_pool(int num_threads, int total_tasks) {
+  ThreadPoolDeq<Task> pool;
+  std::atomic<int> tasks_remaining(total_tasks);
 
+  Task t;
+  t.func = my_task_wrapper;
+  t.arg = &tasks_remaining;
+
+  auto start = std::chrono::high_resolution_clock::now();
+
+  // using namespace std::chrono_literals;
+  // pool.addTask([&tasks_remaining](){
+  //     std::this_thread::sleep_for(1s);
+  //     });
+
+  for (int i = 0; i < total_tasks; ++i) {
+    pool.submitTask(t);
+  }
+
+  // "Busy wait" until all tasks are done
+  while (tasks_remaining > 0) {
+    std::this_thread::yield();
+  }
+
+  auto end = std::chrono::high_resolution_clock::now();
+  std::chrono::duration<double> elapsed = end - start;
+
+  std::cout << "--- ThreadPool Benchmark ---" << std::endl;
+  std::cout << "Threads: " << std::thread::hardware_concurrency()
+            << " | Tasks: " << total_tasks << std::endl;
+  std::cout << "Time: " << elapsed.count() << "s" << std::endl;
+  std::cout << "Throughput: " << total_tasks / elapsed.count() << " tasks/sec"
+            << std::endl;
+}
 
 int main() {
-
 
   benchmark_thread_pool(6, 10000000);
 
   // run_benchmark(8, 8, 10000);
 
-
-
-
   // ThreadPool<std::function<void()>> pool;
   //
-  // pool.addTask([]() { std::cout << "Task 1 running on thread " << std::this_thread::get_id() << std::endl; });
-  // pool.addTask([]() { std::cout << "Task 2 running on thread " << std::this_thread::get_id() << std::endl; });
-  // pool.addTask([]() { std::cout << "Task 3 running on thread " << std::this_thread::get_id() << std::endl; });
+  // pool.addTask([]() { std::cout << "Task 1 running on thread " <<
+  // std::this_thread::get_id() << std::endl; }); pool.addTask([]() { std::cout
+  // << "Task 2 running on thread " << std::this_thread::get_id() << std::endl;
+  // }); pool.addTask([]() { std::cout << "Task 3 running on thread " <<
+  // std::this_thread::get_id() << std::endl; });
   //
-
-
 
   //
   // run_unit_tests();
   //
   // std::cout << "starting simulation" << std::endl;
-  // // making shared ptr because we need to share it between our multiple threads
-  // std::shared_ptr<TSQueue<int>> q = std::make_shared<TSQueue<int>>();
+  // // making shared ptr because we need to share it between our multiple
+  // threads std::shared_ptr<TSQueue<int>> q = std::make_shared<TSQueue<int>>();
   //
   // // to manage threads we are using a vector
   // std::vector<std::thread> threads;

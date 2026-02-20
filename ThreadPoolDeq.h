@@ -9,6 +9,19 @@
 #include <thread>
 #include <vector>
 
+
+// Instead of std::function<void()>
+typedef void (*TaskFunc)(void *);
+struct Task {
+  TaskFunc func;
+  void *arg;
+
+  void operator()() const noexcept {
+    if (func)
+      func(arg);
+  }
+};
+
 template <typename T> class ThreadPoolDeq {
 private:
   std::unique_ptr<TSDeque<T>[]> dequeList;
@@ -96,9 +109,9 @@ public:
     dequeList[currentPos].insertAtFront(std::move(task));
   }
 
-  void submitTask(std::function<void()> task) {
-    if (task == nullptr)
-      return;
+  void submitTask(Task& task) {
+    // if (task == nullptr)
+    //   return;
 
     int i = 0;
     do {
