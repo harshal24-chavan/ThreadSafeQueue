@@ -1,5 +1,6 @@
 #include "TSQueue.h"
 #include "ThreadPool.h"
+#include "ThreadPoolDeq.h"
 
 #include <cassert>
 #include <chrono>
@@ -89,13 +90,18 @@ void run_benchmark(int num_producers, int num_consumers,
 
 
 void benchmark_thread_pool(int num_threads, int total_tasks) {
-    ThreadPool<std::function<void()>> pool;
+    ThreadPoolDeq<std::function<void()>> pool;
     std::atomic<int> tasks_remaining(total_tasks);
 
     auto start = std::chrono::high_resolution_clock::now();
 
+    // using namespace std::chrono_literals;
+    // pool.addTask([&tasks_remaining](){
+    //     std::this_thread::sleep_for(1s);
+    //     });
+
     for (int i = 0; i < total_tasks; ++i) {
-      pool.addTask([&tasks_remaining]() {
+      pool.submitTask([&tasks_remaining]() {
           // Perform some dummy work to make the thread "busy"
           double result = 0;
           for(int i = 0; i < 1000; ++i) {
@@ -125,7 +131,7 @@ void benchmark_thread_pool(int num_threads, int total_tasks) {
 int main() {
 
 
-  benchmark_thread_pool(6, 100000);
+  benchmark_thread_pool(6, 10000000);
 
   // run_benchmark(8, 8, 10000);
 

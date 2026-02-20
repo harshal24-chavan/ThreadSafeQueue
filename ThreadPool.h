@@ -31,6 +31,11 @@ public:
     queueList = std::make_unique<TSQueue<T>[]>(maxThreads);
 
     for (int i = 0; i < maxThreads; i++) {
+      // here on this line we are directly making a thread by passing all the required 
+      // parameters.
+      // we could also do std::thread thWorker(&ThreadPool::worker:loop, this, i);
+      // and then emplace_back, but this is shorter and better version 
+      // as we do not have to call the worker_loop function, it will be called under the hood
       workers.emplace_back(&ThreadPool::worker_loop, this, i);
     }
   }

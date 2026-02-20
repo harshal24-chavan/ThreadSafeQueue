@@ -5,7 +5,19 @@
 #include <deque>
 #include <mutex>
 
-template <typename T> class TSDeque {
+// By adding alignas(64), you told the compiler: "Every single TSDeque instance
+// must start at a memory address that is a multiple of 64."
+//
+// This effectively gives every queue its own "private lane" in the CPU cache.
+//
+// Thread 0 can hammer Queue[0] as fast as it wants.
+//
+// Thread 1 can hammer Queue[1] simultaneously.
+//
+// Because they are on separate cache lines, the CPU cores no longer need to
+// talk to each other to "verify" the memory. They can both run at full speed
+// without the hardware-level interrupts.
+template <typename T> class alignas(64) TSDeque {
 private:
   std::deque<T> deq;
   mutable std::mutex mtx;
@@ -33,6 +45,29 @@ public:
     cv.notify_one();
   }
 
+  bool tryInsertAtFront(T &&val) {
+    std::unique_lock<std::mutex> ulk(mtx, std::defer_lock);
+
+    if (!ulk.try_lock())
+      return false;
+
+    deq.push_front(std::move(val));
+    cv.notify_all();
+
+    return true;
+  }
+  bool tryInsertAtFront(T &val) {
+    std::unique_lock<std::mutex> ulk(mtx, std::defer_lock);
+
+    if (!ulk.try_lock())
+      return false;
+
+    deq.push_front(val);
+    cv.notify_all();
+
+    return true;
+  }
+
   bool popAtFront(T &val) {
     // this is for our current thread to work on
     // as the task is fresh in cache
@@ -52,7 +87,32 @@ public:
     return true;
   }
 
-  bool popAtBack(T &val) {
+  bool tryPopAtFront(T &val) {
+    std::unique_lock<std::mutex> ulk(mtx, std::defer_lock);
+
+    // checking first for efficiency
+    if (deq.empty()) {
+      return false;
+    }
+
+    if (!ulk.try_lock()) {
+      // lock not acquired then return false
+      return false;
+    }
+
+    // maybe someone took the element before locking
+    // hence checking again
+    if (deq.empty()) {
+      return false;
+    }
+
+    val = std::move(deq.front());
+    deq.pop_front();
+
+    return true;
+  }
+
+  bool tryPopAtBack(T &val) {
     // this is for the theif thread
     // as this task is probably removed from current threads cache
     // we want to steal this task and give it to another thread
@@ -84,6 +144,8 @@ public:
     bool temp = workDone.test_and_set();
 
     // why do I have to notify here?
+    // so that no thread keeps on listening with cv.wait(), and becomes a dead
+    // lock
     cv.notify_all();
   }
 };
