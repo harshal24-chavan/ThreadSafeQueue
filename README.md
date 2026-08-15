@@ -1,3 +1,5 @@
+![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)
+
 # C++ Thread Pool with Thread  Safe Queue
 
 ## A header-only, modern C++ thread pool implementation focusing on low-latency task distribution and high throughput.
@@ -5,7 +7,7 @@
 
 ### 🚀 Performance Evolution
 
-The pool was benchmarked using 10 million tasks on a 4-core (8-thread) machine. Each task consisted of 1,000 iterations of double-precision floating-point math.
+The pool was benchmarked using 10 million tasks on a 2-core (4-thread) machine. Each task consisted of 1,000 iterations of double-precision floating-point math.
 
 |Milestone|Implementation |Throughput (Tasks/sec)|Key Optimization |
 |---------|---------------|----------------------|-----------------|
@@ -99,25 +101,34 @@ struct Task {
 };
 ```
 
+## Lock-Free Chase-Lev Deque Latency & Performance Profiling:
+To validate the lock-free architecture and evaluate thread contention, the scheduler was profiled using cycle-accurate hardware timestamp counters (`__rdtsc` / `__rdtscp` with `_mm_lfence` to prevent speculative out-of-order execution).
+
+To ensure zero observer effect during benchmarking, all timestamp deltas were written directly to a pre-allocated flat array, completely avoiding heap allocations or locks on the hot path.
+#### Setup:
+- Workload: 1,048,575 dynamically spawned tasks (Fork-Join topology, tree depth 19).
+- Payload: Each task executes a tight 500-iteration floating-point compute loop before spawning up to two child tasks.
+
+#### Result:
+Measured two distinct metrics to isolate the overhead of the scheduler from the execution of the business logic:
+- Dispatch Latency (Queue Wait Time): Time from when a parent spawns a task to the exact microsecond a worker begins executing it.
+- End-to-End Pipeline Latency: Total time from task creation, through the lock-free deque, workload execution, child spawning, and termination.
+
+|Percentile| Dispatch Latency (Wait Time)| End-to-End Pipeline (Total Time)|
+|---------|---------------|----------------------|
+|P50 (Median)| 5,508 cycles (1.80 µs)| 10,292 cycles (3.36 µs)|
+|P90| 42,060 cycles (13.75 µs)| 47,732 cycles (15.60 µs)|
+|P99| 378,472 cycles (123.68 µs)| 382,480 cycles (124.99 µs)|
+|P99.9| 3,517,860 cycles (1.14 ms)| 5,946,132 cycles (1.94 ms)|
+|P99.99| 49,657,296 cycles (16.22 ms)| 49,646,496 cycles (16.22 ms)|
+|Max (OS Jitter)| ~1.60B cycles (523 ms)| ~1.65B cycles (541 ms)|
+
+
 
 ---
-### ⚙️ How to Build
-
-C++17 or higher.
+### ⚙️ How to Build & Run
 ```Bash
-mkdir build && cd build && cmake .. && make
+$ g++ -O3 -g -mtune=native -fno-omit-frame-pointer -pthread -std=c++20 main.cpp -o scheduler_bench -Wno-interference-size -fsanitize=address
+
+$ ./scheduler_bench
 ```
-### ⚙️ How to run
-(from root directory of the project)
-```Bash
-cd build && ./ts_project
-```
-
----
-### 📝 Future Roadmap
-
-    [✅] Implement Work-Stealing logic to handle non-uniform workloads.
-
-    [ ] Integrate C++20 std::stop_token for cleaner shutdowns.
-
-    [ ] Add support for std::future to allow tasks to return values.
