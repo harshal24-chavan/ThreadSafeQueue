@@ -7,65 +7,48 @@
 #include <x86intrin.h> // For __rdtsc() and __rdtscp()
 #endif
 
-// Include your scheduler header here
-// #include "WorkStealingScheduler.h"
-
 constexpr int TREE_DEPTH = 19;
 constexpr int TOTAL_TASKS = (1 << (TREE_DEPTH + 1)) - 1;
 
 std::atomic<int> tasks_remaining{TOTAL_TASKS};
 
-// Global array to hold raw cycle latencies without allocating on the hot path.
-// We use a raw array to guarantee zero overhead.
 uint64_t global_latencies[TOTAL_TASKS];
 
 struct TaskContext {
   WorkStealingScheduler<2, 1024> *sched;
   int task_index;
-  uint64_t spawn_tsc; // Cycles timestamp when this task was created
+  uint64_t spawn_tsc;
 };
 
 std::vector<TaskContext> global_contexts;
 
-// ---------------------------------------------------------
-// INLINE TSC WRAPPERS
-// ---------------------------------------------------------
 inline uint64_t rdtsc_start() {
-  // lfence prevents earlier instructions from reordering past the timestamp
   _mm_lfence();
   return __rdtsc();
 }
 
 inline uint64_t rdtsc_end() {
   unsigned int aux;
-  // rdtscp serializes inherently, ensuring all task code finishes first
   uint64_t tsc = __rdtscp(&aux);
-  _mm_lfence(); // Prevent future instructions from moving backward
+  _mm_lfence();
   return tsc;
 }
 
-// ---------------------------------------------------------
-// THE TASK ROUTINE
-// ---------------------------------------------------------
 void cpu_heavy_task(std::size_t my_worker_id, void *arg) {
-  // 1. Immediately stamp the start time.
   uint64_t start_tsc = rdtsc_end();
 
   TaskContext *ctx = static_cast<TaskContext *>(arg);
 
-  // Calculate queue latency: Time from parent spawning it -> to this core
-  // running it
-  if (ctx->task_index != 0) { // Skip root task
+  if (ctx->task_index != 0) {
     global_latencies[ctx->task_index] = start_tsc - ctx->spawn_tsc;
   }
 
-  // 2. Simulate real work
   volatile double compute = 0.0;
   for (int i = 0; i < 500; ++i) {
     compute += i * 3.14159;
   }
 
-  // 3. Spawn children with their spawn timestamps
+  // Spawn children with their spawn timestamps
   int left_idx = 2 * ctx->task_index + 1;
   int right_idx = 2 * ctx->task_index + 2;
 
@@ -79,13 +62,9 @@ void cpu_heavy_task(std::size_t my_worker_id, void *arg) {
                       &global_contexts[right_idx]);
   }
 
-  // 4. Mark complete
   tasks_remaining.fetch_sub(1, std::memory_order_release);
 }
 
-// ---------------------------------------------------------
-// PERCENTILE HISTOGRAM GENERATOR
-// ---------------------------------------------------------
 void print_latency_histogram(uint64_t *latencies, size_t count,
                              double cpu_ghz) {
   std::cout << "\n[*] Building Latency Histogram (Queue Wait Times)...\n";
